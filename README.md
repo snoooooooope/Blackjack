@@ -1,6 +1,7 @@
 # Blackjack
 
 Notifications for combat events you should probably know about.
+
 What originally started as a rewrite to the original SpellNotifications by Veev morphed into this dual SpellNotification / SpellAlerter monstrosity I have now.
 
 ## Features
@@ -23,3 +24,9 @@ What originally started as a rewrite to the original SpellNotifications by Veev 
 ## Requirements
 
 - ***[!!!ClassicAPI](https://gitlab.com/Tsoukie/classicapi/-/tree/main?ref_type=heads)*** (eventually will be removed once I add proper fallbacks)
+
+## Credits
+
+- [Tsoukie](https://gitlab.com/Tsoukie) ClassicAPI is a lifesaver
+- [Veev](https://www.twitch.tv/veev) Original SpellNotifications addon
+- [SoundAlerter maintainers](https://github.com/Cortes-Jeremy/SoundAlerter)
