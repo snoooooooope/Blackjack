@@ -1,0 +1,17 @@
+------------------------------------------------------------------------
+r5 | mikk | 2009-12-15 16:35:44 +0000 (Tue, 15 Dec 2009) | 2 lines
+Changed paths:
+   M /trunk/LibWindow-1.1/LibWindow-1.1.lua
+   M /trunk/LibWindow-1.1.toc
+
+- TOC 30300
+- Use GetObjectType rather than GetFrameType (removed as of 3.3)
+------------------------------------------------------------------------
+r4 | mikk | 2009-09-01 11:51:08 +0000 (Tue, 01 Sep 2009) | 2 lines
+Changed paths:
+   M /trunk/LibWindow-1.1/LibWindow-1.1.lua
+   M /trunk/LibWindow-1.1.toc
+
+- TOC 30200
+- "EnableMouseOnAlt" will now mix in properly when embedded
+------------------------------------------------------------------------

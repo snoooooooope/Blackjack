@@ -1,0 +1,18 @@
+## Interface: 30300
+## Title: Blackjack
+## Notes: Displays information about combat events you should probably know about.
+## Author: discord@makkado
+## Version: 1.0
+## Dependencies: !!!ClassicAPI
+## SavedVariables: BlackjackDB
+
+Libs\Load.xml
+Core.lua
+LSMRegister.lua
+SpellDB.lua
+Filters.lua
+CombatLog.lua
+SoundAlerts.lua
+VisualAlerts.lua
+Config.lua
+Init.lua

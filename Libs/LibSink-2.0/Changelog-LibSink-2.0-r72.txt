@@ -1,0 +1,14 @@
+------------------------------------------------------------------------
+r72 | rabbit | 2010-10-16 08:00:10 +0000 (Sat, 16 Oct 2010) | 1 line
+Changed paths:
+   M /trunk/LibSink-2.0/LibSink-2.0.lua
+   M /trunk/LibSink-2.0.toc
+
+Force load Blizzard_CombatText if needed.
+------------------------------------------------------------------------
+r71 | rabbit | 2010-07-04 09:54:00 +0000 (Sun, 04 Jul 2010) | 1 line
+Changed paths:
+   M /trunk/LibSink-2.0/LibSink-2.0.lua
+
+Oops, fixed the error when using the new channel output.
+------------------------------------------------------------------------
