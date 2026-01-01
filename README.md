@@ -8,11 +8,11 @@ What originally started as a rewrite to the original SpellNotifications by Veev 
 
 - **Interrupt Tracking**: Visual and audio notifications when you interrupt enemy spells
 
-- **Dispel Tracking**: Alerts for successful dispels with spell information
+- **Dispel & Purge Tracking**: Alerts for successful dispels/purges with spell information
 
 - **Customizable Alerts**: Adjustable font, size, and sound effects
 
-- **Configurable Filters**: Enable/disable specific spell tracking
+- **Configurable Filters**: Enable/disable specific spell tracking with configurable alerts
 
 
 ## Commands
