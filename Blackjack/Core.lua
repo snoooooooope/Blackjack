@@ -19,6 +19,8 @@ function Blackjack:InitializeDatabase()
             filters = {
                 enabled = true
             },
+            -- Per-spell overrides: custom visual text and sound key per class/spellId
+            spellSettings = {},
             notifications = {
                 enabled = true,
                 position = "CENTER",
@@ -29,6 +31,8 @@ function Blackjack:InitializeDatabase()
                 alertSound = "Attention",
                 interruptSound = "Kick",
                 dispelSound = "Dispel",
+                showMisses = true,
+                missFontSize = 14,
                 -- LibWindow position data
                 visualAlert_x = 0,
                 visualAlert_y = 220,

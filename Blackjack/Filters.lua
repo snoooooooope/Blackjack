@@ -53,3 +53,38 @@ function Filters:SetAllFiltersEnabled(enabled)
 end
 
 Blackjack:RegisterModule("Filters", Filters)
+
+-- Convenience API for whitelist/blacklist management
+function Filters:AddToWhitelist(spellId)
+    if not self.db or not self.db.profile then return end
+    if not self.db.profile.whitelist then self.db.profile.whitelist = {} end
+    self.db.profile.whitelist[spellId] = true
+    self.whitelist = self.db.profile.whitelist
+end
+
+function Filters:RemoveFromWhitelist(spellId)
+    if not self.db or not self.db.profile or not self.db.profile.whitelist then return end
+    self.db.profile.whitelist[spellId] = nil
+    self.whitelist = self.db.profile.whitelist
+end
+
+function Filters:GetWhitelist()
+    return self.db and self.db.profile and self.db.profile.whitelist or {}
+end
+
+function Filters:AddToBlacklist(spellId)
+    if not self.db or not self.db.profile then return end
+    if not self.db.profile.blacklist then self.db.profile.blacklist = {} end
+    self.db.profile.blacklist[spellId] = true
+    self.blacklist = self.db.profile.blacklist
+end
+
+function Filters:RemoveFromBlacklist(spellId)
+    if not self.db or not self.db.profile or not self.db.profile.blacklist then return end
+    self.db.profile.blacklist[spellId] = nil
+    self.blacklist = self.db.profile.blacklist
+end
+
+function Filters:GetBlacklist()
+    return self.db and self.db.profile and self.db.profile.blacklist or {}
+end

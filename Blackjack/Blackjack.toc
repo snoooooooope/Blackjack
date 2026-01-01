@@ -1,8 +1,8 @@
 ## Interface: 30300
 ## Title: Blackjack
 ## Notes: Displays information about combat events you should probably know about.
-## Author: discord@makkado
-## Version: 1.0
+## Author: discord@morucarti
+## Version: 1.1.0
 ## Dependencies: !!!ClassicAPI
 ## SavedVariables: BlackjackDB
 

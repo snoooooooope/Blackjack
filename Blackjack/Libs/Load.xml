@@ -5,6 +5,9 @@
     <Script file="AceEvent-3.0\AceEvent-3.0.lua"/>
     <Script file="AceConsole-3.0\AceConsole-3.0.lua"/>
     <Script file="AceDB-3.0\AceDB-3.0.lua"/>
+    <Script file="AceConfig-3.0\AceConfigRegistry-3.0\AceConfigRegistry-3.0.lua"/>
+    <Script file="AceConfig-3.0\AceConfigDialog-3.0\AceConfigDialog-3.0.lua"/>
+    <Script file="AceConfig-3.0\AceConfigCmd-3.0\AceConfigCmd-3.0.lua"/>
     <Script file="AceConfig-3.0\AceConfig-3.0.lua"/>
     <Script file="AceHook-3.0\AceHook-3.0.lua"/>
     <Script file="LibSharedMedia-3.0\LibSharedMedia-3.0.lua"/>

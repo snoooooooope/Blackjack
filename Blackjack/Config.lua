@@ -2,6 +2,7 @@ local Blackjack = _G.Blackjack
 local LibStub = _G.LibStub
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 local LSM = LibStub("LibSharedMedia-3.0")
+local LibWindow = LibStub("LibWindow-1.1")
 
 local Config = {
     frame = nil,
@@ -15,10 +16,245 @@ function Config:OnInitialize(db)
     self.db.profile.notifications = self.db.profile.notifications or {}
     self.db.profile.filters = self.db.profile.filters or {}
     self.db.profile.notifications.font = self.db.profile.notifications.font or {}
-    self.db.profile.notifications.fontSize = self.db.profile.notifications.fontSize or {}   
+    self.db.profile.notifications.fontSize = self.db.profile.notifications.fontSize or {}
     self.db.profile.notifications.iconSize = self.db.profile.notifications.iconSize or {}
     self.db.profile.notifications.enabled = self.db.profile.notifications.enabled or {}
     self.db.profile.notifications.sound = self.db.profile.notifications.sound or {}
+    self.db.profile.windowSettings = self.db.profile.windowSettings or {}
+end
+ 
+function Config:CreateWhitelistTab(content)
+    local title = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 10, -10)
+    title:SetText("Whitelist")
+    title:SetTextColor(1,1,0)
+
+    -- Scrollable list of whitelist entries
+    local scrollFrame = CreateFrame("ScrollFrame", nil, content)
+    scrollFrame:SetPoint("TOPLEFT", 10, -80)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+
+    content:SetScript("OnSizeChanged", function(self, width, height)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+        local scrollChild = scrollFrame:GetScrollChild()
+        if scrollChild then
+            scrollChild:SetWidth(scrollFrame:GetWidth())
+        end
+    end)
+    local scrollBar = CreateFrame("Slider", nil, scrollFrame, "UIPanelScrollBarTemplate")
+    scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 4, -16)
+    scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 4, 16)
+    scrollBar:SetMinMaxValues(0,1)
+    scrollBar:SetValueStep(1)
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(scrollFrame:GetWidth(), 1)
+    scrollFrame:SetScrollChild(scrollChild)
+
+    local function refresh()
+        for _, child in ipairs({scrollChild:GetChildren()}) do child:Hide() end
+        local i = 0
+        for spellId, _ in pairs(Blackjack.modules.Filters:GetWhitelist()) do
+            i = i + 1
+            -- row positioning for whitelist (50px rows)
+            local rowHeight = 50
+            local rowY = -((i-1) * rowHeight)
+            local baselineY = rowY  -- All elements align to this baseline
+
+            -- grid-based column positions for whitelist
+            local width = scrollFrame:GetWidth()
+            local margin = math.max(10, width * 0.02)
+
+            -- Define grid columns as percentages of width
+            local col1 = margin  -- Spell ID column
+            local col2 = margin + math.max(120, width * 0.15)  -- Alert text column
+            local col3 = margin + math.max(280, width * 0.35)  -- Sound dropdown column
+            local col4 = margin + math.max(480, width * 0.65)  -- Preview button column
+            local col5 = width - margin - 80  -- Remove button column
+
+            local alertTextPos = col2
+            local soundPos = col3
+            local previewPos = col4
+            local removeBtnPos = col5
+
+            local txt = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            txt:SetPoint("TOPLEFT", margin, baselineY + 2)
+            txt:SetText(tostring(spellId))
+            local btn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+            btn:SetSize(60, 20)
+            btn:SetPoint("TOPLEFT", removeBtnPos, baselineY + 2)
+            btn:SetText("Remove")
+            btn:SetScript("OnClick", function()
+                Blackjack.modules.Filters:RemoveFromWhitelist(spellId)
+                refresh()
+            end)
+
+            -- Per-spell custom text and sound (global scope)
+            if not self.db.profile.spellSettings then self.db.profile.spellSettings = {} end
+            if not self.db.profile.spellSettings["GLOBAL"] then self.db.profile.spellSettings["GLOBAL"] = {} end
+            local gs = self.db.profile.spellSettings["GLOBAL"][spellId] or {}
+
+            local textLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            textLabel:SetPoint("TOPLEFT", alertTextPos, baselineY + 2)
+            textLabel:SetText("Alert Text:")
+            local textEdit = CreateFrame("EditBox", nil, scrollChild)
+            -- Calculate width based on space available in column (from label to next column)
+            local availableWidth = col3 - alertTextPos - 10  -- Space between alert text and sound dropdown
+            local alertTextWidth = math.min(160, availableWidth * 0.7)  -- Use 70% of available space for whitelist
+            textEdit:SetSize(alertTextWidth, 18)
+            textEdit:SetPoint("TOPLEFT", alertTextPos + 65, baselineY + 2)
+            textEdit:SetFontObject("GameFontNormal")
+            textEdit:SetText(gs.customText or "")
+            local bg = textEdit:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg:SetColorTexture(0.1, 0.1, 0.1, 1)
+            textEdit:SetScript("OnEnterPressed", function(selfBox)
+                local val = selfBox:GetText() or ""
+                if not self.db.profile.spellSettings["GLOBAL"] then self.db.profile.spellSettings["GLOBAL"] = {} end
+                if not self.db.profile.spellSettings["GLOBAL"][spellId] then self.db.profile.spellSettings["GLOBAL"][spellId] = {} end
+                self.db.profile.spellSettings["GLOBAL"][spellId].customText = val
+                -- ensure whitelisted
+                Blackjack.modules.Filters:AddToWhitelist(spellId)
+            end)
+
+            local sounds = self:GetRegisteredSounds()
+            local currentSound = (gs.sound or self.db.profile.notifications.alertSound or sounds[1])
+            local dd = self:CreateDropdown(scrollChild, "Sound", sounds, currentSound, soundPos, baselineY + 2, function(value)
+                if not self.db.profile.spellSettings["GLOBAL"] then self.db.profile.spellSettings["GLOBAL"] = {} end
+                if not self.db.profile.spellSettings["GLOBAL"][spellId] then self.db.profile.spellSettings["GLOBAL"][spellId] = {} end
+                self.db.profile.spellSettings["GLOBAL"][spellId].sound = value
+                Blackjack.modules.Filters:AddToWhitelist(spellId)
+            end, 140)
+        local preview = self:CreatePreviewButton(scrollChild, function() return (self.db.profile.spellSettings["GLOBAL"] and self.db.profile.spellSettings["GLOBAL"][spellId] and self.db.profile.spellSettings["GLOBAL"][spellId].sound) or currentSound end, previewPos, baselineY + 2)
+        end
+        scrollChild:SetSize(scrollFrame:GetWidth(), math.max(1, i * 50))
+    end
+
+    -- Add spell by ID
+    local addBox = self:CreateEditBox(content, "Spell ID:", 0, 10, -40, function(value)
+        if value and value > 0 then
+            Blackjack.modules.Filters:AddToWhitelist(value)
+            refresh()
+        end
+    end)
+
+    refresh()
+end
+
+function Config:CreateBlacklistTab(content)
+    local title = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 10, -10)
+    title:SetText("Blacklist")
+    title:SetTextColor(1,1,0)
+
+    local scrollFrame = CreateFrame("ScrollFrame", nil, content)
+    scrollFrame:SetPoint("TOPLEFT", 10, -80)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+
+    -- Make scroll frame resize with content
+    content:SetScript("OnSizeChanged", function(self, width, height)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+        local scrollChild = scrollFrame:GetScrollChild()
+        if scrollChild then
+            scrollChild:SetWidth(scrollFrame:GetWidth())
+        end
+    end)
+
+    local scrollBar = CreateFrame("Slider", nil, scrollFrame, "UIPanelScrollBarTemplate")
+    scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 4, -16)
+    scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 4, 16)
+    scrollBar:SetMinMaxValues(0,1)
+    scrollBar:SetValueStep(1)
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(scrollFrame:GetWidth(), 1)
+    scrollFrame:SetScrollChild(scrollChild)
+
+    local function refresh()
+        for _, child in ipairs({scrollChild:GetChildren()}) do child:Hide() end
+        local i = 0
+        for spellId, _ in pairs(Blackjack.modules.Filters:GetBlacklist()) do
+            i = i + 1
+            -- row positioning for blacklist (50px rows)
+            local rowHeight = 50
+            local rowY = -((i-1) * rowHeight)
+            local baselineY = rowY  -- All elements align to this baseline
+
+            -- Create grid-based column positions for blacklist
+            local width = scrollFrame:GetWidth()
+            local margin = math.max(10, width * 0.02)
+
+            -- Define grid columns as percentages of width
+            local col1 = margin  -- Spell ID column
+            local col2 = margin + math.max(120, width * 0.15)  -- Alert text column
+            local col3 = margin + math.max(280, width * 0.35)  -- Sound dropdown column
+            local col4 = margin + math.max(480, width * 0.65)  -- Preview button column
+            local col5 = width - margin - 80  -- Remove button column
+
+            local alertTextPos = col2
+            local soundPos = col3
+            local previewPos = col4
+            local removeBtnPos = col5
+
+            local txt = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            txt:SetPoint("TOPLEFT", margin, baselineY + 2)
+            txt:SetText(tostring(spellId))
+            local btn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+            btn:SetSize(60, 20)
+            btn:SetPoint("TOPLEFT", removeBtnPos, baselineY + 2)
+            btn:SetText("Remove")
+            btn:SetScript("OnClick", function()
+                Blackjack.modules.Filters:RemoveFromBlacklist(spellId)
+                refresh()
+            end)
+
+            -- Per-spell custom text and sound (global scope)
+            if not self.db.profile.spellSettings then self.db.profile.spellSettings = {} end
+            if not self.db.profile.spellSettings["GLOBAL"] then self.db.profile.spellSettings["GLOBAL"] = {} end
+            local gs = self.db.profile.spellSettings["GLOBAL"][spellId] or {}
+
+            local textLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            textLabel:SetPoint("TOPLEFT", alertTextPos, baselineY + 2)
+            textLabel:SetText("Alert Text:")
+            local textEdit = CreateFrame("EditBox", nil, scrollChild)
+            -- Calculate width based on space available in column (from label to next column)
+            local availableWidth = col3 - alertTextPos - 10  -- Space between alert text and sound dropdown
+            local alertTextWidth = math.min(160, availableWidth * 0.7)  -- Use 70% of available space for whitelist
+            textEdit:SetSize(alertTextWidth, 18)
+            textEdit:SetPoint("TOPLEFT", alertTextPos + 55, baselineY + 2)
+            textEdit:SetFontObject("GameFontNormal")
+            textEdit:SetText(gs.customText or "")
+            local bg = textEdit:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg:SetColorTexture(0.1, 0.1, 0.1, 1)
+            textEdit:SetScript("OnEnterPressed", function(selfBox)
+                local val = selfBox:GetText() or ""
+                if not self.db.profile.spellSettings["GLOBAL"] then self.db.profile.spellSettings["GLOBAL"] = {} end
+                if not self.db.profile.spellSettings["GLOBAL"][spellId] then self.db.profile.spellSettings["GLOBAL"][spellId] = {} end
+                self.db.profile.spellSettings["GLOBAL"][spellId].customText = val
+                -- ensure blacklisted entry keeps override
+                Blackjack.modules.Filters:AddToBlacklist(spellId)
+            end)
+
+            local sounds = self:GetRegisteredSounds()
+            local currentSound = (gs.sound or self.db.profile.notifications.alertSound or sounds[1])
+            local dd = self:CreateDropdown(scrollChild, "Sound", sounds, currentSound, soundPos, baselineY + 2, function(value)
+                if not self.db.profile.spellSettings["GLOBAL"] then self.db.profile.spellSettings["GLOBAL"] = {} end
+                if not self.db.profile.spellSettings["GLOBAL"][spellId] then self.db.profile.spellSettings["GLOBAL"][spellId] = {} end
+                self.db.profile.spellSettings["GLOBAL"][spellId].sound = value
+                Blackjack.modules.Filters:AddToBlacklist(spellId)
+            end, 140)
+        local preview = self:CreatePreviewButton(scrollChild, function() return (self.db.profile.spellSettings["GLOBAL"] and self.db.profile.spellSettings["GLOBAL"][spellId] and self.db.profile.spellSettings["GLOBAL"][spellId].sound) or currentSound end, previewPos, baselineY + 2)
+        end
+        scrollChild:SetSize(scrollFrame:GetWidth(), math.max(1, i * 50))
+    end
+
+    local addBox = self:CreateEditBox(content, "Spell ID:", 0, 10, -40, function(value)
+        if value and value > 0 then
+            Blackjack.modules.Filters:AddToBlacklist(value)
+            refresh()
+        end
+    end)
+
+    refresh()
 end
 
 function Config:EnsureInitialized()
@@ -36,7 +272,7 @@ function Config:CreatePanel()
 
     -- Main configuration frame
     self.frame = CreateFrame("Frame", "BlackjackConfigFrame", UIParent)
-    self.frame:SetSize(600, 400)
+    self.frame:SetSize(900, 700)
     self.frame:SetPoint("CENTER")
     self.frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -47,11 +283,44 @@ function Config:CreatePanel()
         insets = { left = 11, right = 12, top = 12, bottom = 11 }
     })
     self.frame:SetMovable(true)
+    self.frame:SetResizable(true)
+    self.frame:SetMinResize(600, 400)
+    self.frame:SetMaxResize(1400, 1000)
     self.frame:EnableMouse(true)
     self.frame:RegisterForDrag("LeftButton")
     self.frame:SetScript("OnDragStart", self.frame.StartMoving)
     self.frame:SetScript("OnDragStop", self.frame.StopMovingOrSizing)
     self.frame:Hide()
+
+    -- Create resize grip
+    local resizeGrip = CreateFrame("Button", nil, self.frame)
+    resizeGrip:SetSize(16, 16)
+    resizeGrip:SetPoint("BOTTOMRIGHT", -5, 5)
+    resizeGrip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    resizeGrip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    resizeGrip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    resizeGrip:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" then
+            self:GetParent():StartSizing("BOTTOMRIGHT")
+        end
+    end)
+    resizeGrip:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" then
+            self:GetParent():StopMovingOrSizing()
+            -- Save the new size
+            LibWindow.SavePosition(self:GetParent())
+            -- Update content layout
+            self:GetParent().obj:UpdateLayout()
+        end
+    end)
+
+    -- Store reference to Config object for resize callbacks
+    self.frame.obj = self
+
+    -- Register with LibWindow
+    LibWindow.RegisterConfig(self.frame, self.db.profile.windowSettings or {})
+    LibWindow.RestorePosition(self.frame)
+    LibWindow.MakeDraggable(self.frame)
 
     local title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOP", 0, -15)
@@ -104,12 +373,14 @@ function Config:ShowTab(name)
         if tab.name == name then
             if not tab.content then
                 tab.content = CreateFrame("Frame", nil, self.frame)
-                tab.content:SetPoint("TOPLEFT", 20, -80)
-                tab.content:SetPoint("BOTTOMRIGHT", -20, 20)
+                tab.content:SetAllPoints()
                 tab.func(self, tab.content)
             end
             self.currentTab = tab.content
             tab.content:Show()
+
+            -- Update layout for current content
+            self:UpdateLayout()
 
             -- Clear focus to prevent auto-selection of edit boxes
             C_Timer.After(0.1, function()
@@ -135,6 +406,36 @@ function Config:CreateGeneralTab(content)
     debugCheck:SetScript("OnClick", function(cb)
         self.db.profile.debug = cb:GetChecked()
         Blackjack:DebugMessage("Debug mode " .. (self.db.profile.debug and "enabled" or "disabled"))
+    end)
+
+    local missCheck = self:CreateCheckbox(content, "Show missed, dodged & parried spells", 10, -40)
+    missCheck:SetChecked(self.db.profile.notifications.showMisses)
+
+    local missFontValue = self.db.profile.notifications.missFontSize or 14
+    local missFontEdit = self:CreateEditBox(content, "Font size:", missFontValue, 10, -70,
+        function(value)
+            self.db.profile.notifications.missFontSize = value
+            if Blackjack.modules.VisualAlerts then
+                Blackjack.modules.VisualAlerts:UpdateFont()
+            end
+        end
+    )
+
+    if not self.db.profile.notifications.showMisses then
+        missFontEdit:Hide()
+        if missFontEdit.label then missFontEdit.label:Hide() end
+    end
+
+    missCheck:SetScript("OnClick", function(cb)
+        self.db.profile.notifications.showMisses = cb:GetChecked()
+        Blackjack:DebugMessage("ShowMisses " .. (self.db.profile.notifications.showMisses and "enabled" or "disabled"))
+        if self.db.profile.notifications.showMisses then
+            missFontEdit:Show()
+            if missFontEdit.label then missFontEdit.label:Show() end
+        else
+            missFontEdit:Hide()
+            if missFontEdit.label then missFontEdit.label:Hide() end
+        end
     end)
 end
 
@@ -370,6 +671,8 @@ function Config:CreateFiltersTab(content)
         { name = "Shaman",      func = self.CreateClassFiltersTab, class = "SHAMAN" },
         { name = "Warlock",     func = self.CreateClassFiltersTab, class = "WARLOCK" },
         { name = "Warrior",     func = self.CreateClassFiltersTab, class = "WARRIOR" }
+        ,{ name = "Whitelist",   func = self.CreateWhitelistTab },
+        { name = "Blacklist",   func = self.CreateBlacklistTab }
     }
 
     -- Create sub-tab buttons
@@ -414,11 +717,108 @@ function Config:CreateFiltersTab(content)
 
     -- Create filter content area for sub-tabs
     self.filterContent = CreateFrame("Frame", nil, content)
-    self.filterContent:SetPoint("TOPLEFT", 100, -10)
-    self.filterContent:SetPoint("BOTTOMRIGHT", -10, 10)
+    self.filterContent:SetAllPoints()
 
     -- Show default filter sub-tab (General)
     self:ShowFilterSubTab("General")
+end
+
+function Config:UpdateLayout()
+    if not self.frame then return end
+
+    local width, height = self.frame:GetSize()
+
+    -- Update tab content area
+    if self.currentTab then
+        self.currentTab:SetPoint("TOPLEFT", 20, -80)
+        self.currentTab:SetPoint("BOTTOMRIGHT", -20, 20)
+
+        -- Update scroll children width to match new content width
+        self:UpdateScrollContentWidth(self.currentTab)
+    end
+
+    -- Update filter content area
+    if self.filterContent then
+        self.filterContent:SetPoint("TOPLEFT", 100, -10)
+        self.filterContent:SetPoint("BOTTOMRIGHT", -10, 10)
+
+        -- Update scroll children in filter content
+        self:UpdateScrollContentWidth(self.filterContent)
+    end
+end
+
+function Config:UpdateScrollContentWidth(parentFrame)
+    -- Find all scroll frames in the parent and update their content width
+    for _, child in ipairs({parentFrame:GetChildren()}) do
+        if child:GetObjectType() == "ScrollFrame" then
+            -- Update scroll child width to match scroll frame width
+            local scrollChild = child:GetScrollChild()
+            if scrollChild then
+                local newWidth = child:GetWidth()
+                scrollChild:SetWidth(newWidth)
+                -- Reposition elements in the scroll child based on new width
+                self:UpdateElementPositions(scrollChild, newWidth)
+            end
+        end
+    end
+end
+
+function Config:UpdateElementPositions(scrollChild, width)
+    -- Determine if this is whitelist/blacklist (50px rows) or class filters (25px rows)
+    local hasRemoveButton = false
+    for _, child in ipairs({scrollChild:GetChildren()}) do
+        if child:GetObjectType() == "Button" and child:GetText() == "Remove" then
+            hasRemoveButton = true
+            break
+        end
+    end
+
+    -- Create grid-based column positions for consistent alignment
+    local margin = math.max(10, width * 0.02)
+
+    local col1 = margin  -- Spell name/ID column
+    local col2 = margin + math.max(120, width * 0.15)  -- Alert text column
+    local col3 = margin + math.max(280, width * 0.35)  -- Sound dropdown column
+    local col4 = margin + math.max(480, width * 0.65)  -- Preview button column
+    local col5 = width - margin - 80  -- Checkbox/remove button column
+
+    -- Determine row height based on content type
+    local rowHeight = hasRemoveButton and 50 or 25  -- 50px for whitelist/blacklist, 25px for class filters
+
+    -- Update positions of all elements in the scroll child using grid columns
+    for _, child in ipairs({scrollChild:GetChildren()}) do
+        local objType = child:GetObjectType()
+        local currentY = select(2, child:GetPoint())
+        local rowIndex = math.floor((-currentY + (rowHeight/2)) / rowHeight)
+        local baselineY = -(rowIndex * rowHeight)
+
+        -- Add slight vertical offset for text elements in taller rows (whitelist/blacklist)
+        local textOffset = (rowHeight == 50) and 2 or 0
+
+        if objType == "FontString" then
+            -- Spell name/ID labels - column 1
+            if child:GetText() and not child:GetText():find(":") then  -- Not a label like "Alert Text:"
+                child:SetPoint("TOPLEFT", col1, baselineY + textOffset)
+            end
+        elseif objType == "CheckButton" then
+            -- Enable/disable checkboxes (class filters) or remove buttons (whitelist/blacklist) - column 5
+            child:SetPoint("TOPLEFT", col5, baselineY + textOffset)
+        elseif objType == "EditBox" then
+            -- Alert text edit boxes - column 2 (with offset for label)
+            child:SetPoint("TOPLEFT", col2 + 55, baselineY + textOffset)
+        elseif objType == "Frame" and child.GetName and child:GetName() and child:GetName():find("Dropdown") then
+            -- Sound dropdowns - column 3
+            child:SetPoint("TOPLEFT", col3, baselineY + textOffset)
+        elseif objType == "Button" and child:GetWidth() == 60 then  -- Preview buttons are 60 wide
+            -- Preview buttons - column 4
+            child:SetPoint("TOPLEFT", col4, baselineY + textOffset)
+        end
+
+        -- Handle labels for edit boxes - column 2
+        if objType == "FontString" and child:GetText() and child:GetText():find("Alert Text:") then
+            child:SetPoint("TOPLEFT", col2, baselineY + textOffset)
+        end
+    end
 end
 
 function Config:ShowFilterSubTab(name)
@@ -487,12 +887,22 @@ function Config:CreateClassFiltersTab(content, class)
         return
     end
 
-    -- Create scrollable list of spells
+    -- Create list of spells
     local scrollFrame = CreateFrame("ScrollFrame", nil, content)
     scrollFrame:SetPoint("TOPLEFT", 10, -40)
     scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
 
-    -- Create scroll bar (this is the scroll bar that appears when the list of spells is too long to fit on the screen)
+    -- Make scroll frame resize with content
+    content:SetScript("OnSizeChanged", function(self, width, height)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+        -- Update scroll content width
+        local scrollChild = scrollFrame:GetScrollChild()
+        if scrollChild then
+            scrollChild:SetWidth(scrollFrame:GetWidth())
+        end
+    end)
+
+    -- Create scroll bar
     local scrollBar = CreateFrame("Slider", nil, scrollFrame, "UIPanelScrollBarTemplate")
     scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 4, -16)
     scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 4, 16)
@@ -502,7 +912,7 @@ function Config:CreateClassFiltersTab(content, class)
     scrollBar:SetWidth(16)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(400, #spells * 25)
+    scrollChild:SetSize(scrollFrame:GetWidth(), #spells * 25)
     scrollFrame:SetScrollChild(scrollChild)
 
     -- Set up scrolling
@@ -518,19 +928,84 @@ function Config:CreateClassFiltersTab(content, class)
     end)
 
     for i, spellInfo in ipairs(spells) do
-        local yPos = -((i-1) * 25)
+        -- Calculate consistent row positioning
+        local rowHeight = 25
+        local rowY = -((i-1) * rowHeight)
+        local baselineY = rowY  -- All elements align to this baseline
+
+        -- Create grid-based column positions
+        local width = scrollFrame:GetWidth()
+        local margin = math.max(10, width * 0.02)
+
+        -- Define grid columns as percentages of width
+        local col1 = margin  -- Spell name column
+        local col2 = margin + math.max(120, width * 0.15)  -- Alert text column
+        local col3 = margin + math.max(280, width * 0.35)  -- Sound dropdown column
+        local col4 = margin + math.max(480, width * 0.65)  -- Preview button column
+        local col5 = width - margin - 80  -- Checkbox column
+
+        local spellNameWidth = col2 - col1 - margin
+        local alertTextPos = col2
+        local soundPos = col3
+        local previewPos = col4
+        local checkboxPos = col5
 
         -- Spell name
         local spellName = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        spellName:SetPoint("TOPLEFT", 10, yPos)
+        spellName:SetPoint("TOPLEFT", margin, baselineY)
         spellName:SetText(spellInfo.name or spellInfo.id)
 
         -- Enable/disable checkbox
-        local spellCheck = self:CreateCheckbox(scrollChild, "", 300, yPos)
+        local spellCheck = self:CreateCheckbox(scrollChild, "", checkboxPos, baselineY)
         spellCheck:SetChecked(Blackjack.modules.Filters:IsSpellEnabled(class, spellInfo.id))
         spellCheck:SetScript("OnClick", function(cb)
             Blackjack.modules.Filters:SetSpellEnabled(class, spellInfo.id, cb:GetChecked())
         end)
+        -- Ensure spellSettings table exists
+        if not self.db.profile.spellSettings then self.db.profile.spellSettings = {} end
+        if not self.db.profile.spellSettings[class] then self.db.profile.spellSettings[class] = {} end
+        local classSettings = self.db.profile.spellSettings[class]
+        local s = classSettings[spellInfo.id] or {}
+
+        -- Alert text edit box
+        local textLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        textLabel:SetPoint("TOPLEFT", alertTextPos, baselineY)
+        textLabel:SetText("Alert Text:")
+        local textEdit = CreateFrame("EditBox", nil, scrollChild)
+        -- Calculate width based on space available in column (from label to next column)
+        local availableWidth = col3 - alertTextPos - 10  -- Space between alert text and sound dropdown
+        local alertTextWidth = math.min(120, availableWidth * 0.6)  -- Use 60% of available space
+        textEdit:SetSize(alertTextWidth, 20)
+        textEdit:SetPoint("TOPLEFT", alertTextPos + 55, baselineY)
+        textEdit:SetFontObject("GameFontNormal")
+        textEdit:SetText(s.customText or "")
+        local bg = textEdit:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.1, 0.1, 0.1, 1)
+        textEdit:SetScript("OnEnterPressed", function(selfBox)
+            local val = selfBox:GetText() or ""
+            if not self.db.profile.spellSettings[class] then self.db.profile.spellSettings[class] = {} end
+            if not self.db.profile.spellSettings[class][spellInfo.id] then self.db.profile.spellSettings[class][spellInfo.id] = {} end
+            self.db.profile.spellSettings[class][spellInfo.id].customText = val
+            -- update local reference
+            classSettings[spellInfo.id] = self.db.profile.spellSettings[class][spellInfo.id]
+            -- ensure this spell is whitelisted so custom alerts always show
+            Blackjack.modules.Filters:AddToWhitelist(spellInfo.id)
+        end)
+
+        -- Sound dropdown
+        local sounds = self:GetRegisteredSounds()
+        local currentSound = (s.sound or self.db.profile.notifications.alertSound or sounds[1])
+        local dd = self:CreateDropdown(scrollChild, "Sound", sounds, currentSound, soundPos, baselineY, function(value)
+            if not self.db.profile.spellSettings[class] then self.db.profile.spellSettings[class] = {} end
+            if not self.db.profile.spellSettings[class][spellInfo.id] then self.db.profile.spellSettings[class][spellInfo.id] = {} end
+            self.db.profile.spellSettings[class][spellInfo.id].sound = value
+            -- ensure this spell is whitelisted when assigning a custom sound
+            Blackjack.modules.Filters:AddToWhitelist(spellInfo.id)
+        end, 140)
+        -- Preview button next to dropdown
+        local previewPos = soundPos + 140 + math.max(50, width * 0.07)
+        local preview = self:CreatePreviewButton(scrollChild, function() return (self.db.profile.spellSettings[class] and self.db.profile.spellSettings[class][spellInfo.id] and self.db.profile.spellSettings[class][spellInfo.id].sound) or currentSound end, previewPos, baselineY)
     end
 end
 
@@ -543,6 +1018,9 @@ function Config:CreateCheckbox(parent, text, x, y)
     local label = cb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("LEFT", cb, "RIGHT", 5, 0)
     label:SetText(text or "")
+
+    -- Expose label for callers so they can anchor other controls to it
+    cb.label = label
 
     return cb
 end
@@ -662,7 +1140,6 @@ function Config:CreatePreviewButton(parent, getSoundNameFunc, x, y)
     button:SetScript("OnClick", function()
         local soundName = getSoundNameFunc()
         if soundName and soundName ~= "" then
-            -- Try to play sound directly using file path
             local soundPath = "Interface\\AddOns\\Blackjack\\Media\\Sounds\\" .. soundName .. ".mp3"
             PlaySoundFile(soundPath)
         end
@@ -731,6 +1208,8 @@ function Config:CreateEditBox(parent, label, currentValue, x, y, callback)
         self:SetText(tostring(currentValue or ""))
     end)
 
+    -- expose the label so callers can hide/show it if needed
+    editBox.label = labelText
     return editBox
 end
 

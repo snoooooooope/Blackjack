@@ -106,6 +106,7 @@ end
 function SpellDB:GetFlagsForType(spellType)
     local flagMap = {
         interrupt = SPELL_FLAGS.INTERRUPT,
+        purge = SPELL_FLAGS.PURGE,
         offensive = SPELL_FLAGS.DEBUFF,
         defensive = SPELL_FLAGS.BUFF,
         personal = SPELL_FLAGS.PERSONAL
@@ -145,6 +146,11 @@ end
 function SpellDB:IsDispel(spellId)
     local data = self.data[spellId]
     return data and bit.band(data.flags, self.flags.DISPEL) ~= 0
+end
+
+function SpellDB:IsPurge(spellId)
+    local data = self.data[spellId]
+    return data and bit.band(data.flags, self.flags.PURGE) ~= 0
 end
 
 function SpellDB:GetSpellsForClass(class)

@@ -33,7 +33,7 @@ function VisualAlerts:InitializeLibWindow()
         return
     end
 
-    -- Register the frame with LibWindow for position saving
+    -- Register the frame with LibWindow
     LibWindow.RegisterConfig(self.frame, self.db.profile.notifications, {
         prefix = "visualAlert_"
     })
@@ -59,20 +59,57 @@ function VisualAlerts:Show(alertType, spellInfo, targetInfo)
     if not self.db.profile.notifications.enabled then return end
     if not spellInfo or not spellInfo.name then return end
 
-    local color = self:GetAlertColor(alertType)
-    local displayText = spellInfo.name
-
-    -- Information for interrupts and dispels
-    if targetInfo then
-        if alertType == "interrupt" and targetInfo.interruptedSpell then
-            local schoolName = self:GetSchoolName(targetInfo.school)
-            displayText = "Kicked: " .. targetInfo.interruptedSpell .. " (" .. schoolName .. ")"
-        elseif alertType == "dispel" and targetInfo.dispelledSpell then
-            displayText = "Dispelled: " .. targetInfo.dispelledSpell
+    if alertType == "miss" and (not self.db.profile.notifications.showMisses) then return end
+    -- Custom text override (per-spell or provided)
+    local displayText = nil
+    if targetInfo and targetInfo.customText and targetInfo.customText ~= "" then
+        displayText = targetInfo.customText
+    elseif spellInfo.customText and spellInfo.customText ~= "" then
+        displayText = spellInfo.customText
+    else
+        -- Choose font size: use missFontSize for miss alerts if configured
+        local font = LSM:Fetch("font", self.db.profile.notifications.font)
+        local size = self.db.profile.notifications.fontSize
+        if alertType == "miss" and self.db.profile.notifications.missFontSize then
+            size = self.db.profile.notifications.missFontSize
         end
+        if font and size then
+            self.text:SetFont(font, size, "OUTLINE")
+        end
+
+        local color = self:GetAlertColor(alertType)
+        displayText = spellInfo.name
+
+        if targetInfo then
+            if alertType == "interrupt" and targetInfo.interruptedSpell then
+                local schoolName = self:GetSchoolName(targetInfo.school)
+                displayText = "Kicked: " .. targetInfo.interruptedSpell .. " (" .. schoolName .. ")"
+            elseif alertType == "dispel" and targetInfo.dispelledSpell then
+                displayText = "Dispelled: " .. targetInfo.dispelledSpell
+            elseif alertType == "purge" and targetInfo.dispelledSpell then
+                displayText = "Purged: " .. targetInfo.dispelledSpell
+            elseif alertType == "miss" and targetInfo and targetInfo.missType then
+                local spellName = spellInfo.name or targetInfo.spellName or "Unknown"
+                local missType = tostring(targetInfo.missType):upper()
+                local verb
+                if missType:find("DODGE") then
+                    verb = "Dodged!"
+                elseif missType:find("PARRY") then
+                    verb = "Parried!"
+                elseif missType:find("MISS") then
+                    verb = "Missed!"
+                else
+                    verb = missType:sub(1,1):upper() .. missType:sub(2):lower() .. "!"
+                end
+                displayText = spellName .. " " .. verb
+            end
+        end
+        -- set color local for later use
+        self._lastColor = color
     end
 
     self.text:SetText(displayText)
+    local color = self._lastColor or self:GetAlertColor(alertType)
     self.text:SetTextColor(color.r, color.g, color.b)
     self.frame:Show()
 
@@ -87,6 +124,7 @@ function VisualAlerts:GetAlertColor(alertType)
     local colorMap = {
         interrupt = { r = 1, g = 0, b = 0 },
         dispel = { r = 1, g = 1, b = 0 },
+        purge = { r = 0.6, g = 0.4, b = 1 },
         offensive = { r = 1, g = 0.5, b = 0 },
         defensive = { r = 0, g = 1, b = 0 },
         personal = { r = 0, g = 1, b = 1 }

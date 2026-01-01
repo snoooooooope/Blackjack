@@ -8,17 +8,17 @@ function SoundAlerts:OnInitialize(db)
     self.db = db
 end
 
-function SoundAlerts:Play(alertType)
+function SoundAlerts:Play(alertType, soundKey)
     if not self.db.profile.notifications.sound then return end
 
-    local soundKey = self:GetSoundForAlert(alertType)
+    local key = soundKey or self:GetSoundForAlert(alertType)
 
     -- Try LSM first, then fallback to direct path
-    local sound = LSM:Fetch("sound", soundKey)
+    local sound = LSM:Fetch("sound", key)
     if sound and sound ~= "Interface\\Quiet.ogg" then
         self:PlayWithAddonVolume(sound)
     else
-        local directPath = "Interface\\AddOns\\Blackjack\\Media\\Sounds\\" .. soundKey .. ".mp3"
+        local directPath = "Interface\\AddOns\\Blackjack\\Media\\Sounds\\" .. key .. ".mp3"
         self:PlayWithAddonVolume(directPath)
     end
 end
@@ -29,12 +29,13 @@ end
 
 function SoundAlerts:GetSoundForAlert(alertType)
     local soundMap = {
-        interrupt = "Kick",  -- Use the registered sound name
-        dispel = "Dispel",    -- Use the registered sound name
-        offensive = "Attention",  -- Use the registered sound name
-        defensive = "Chime",     -- Use the registered sound name
-        personal = "Bell",       -- Use the registered sound name
-        test = "Attention"       -- For test notifications
+        interrupt = "Kick",
+        dispel = "Dispel",
+        purge = "Purge",
+        offensive = "Attention",
+        defensive = "Chime",
+        personal = "Bell",
+        test = "Attention"
     }
     return soundMap[alertType:lower()] or "Attention"
 end
