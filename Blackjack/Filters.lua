@@ -2,18 +2,24 @@ local Blackjack = _G.Blackjack
 
 local Filters = {
     whitelist = {},
-    blacklist = {}
+    blacklist = {},
+    classFilters = nil
 }
 
 function Filters:OnInitialize(db)
     self.db = db
     self:LoadFilters()
+    
+    if self.db.profile and self.db.profile.filters then
+        self.classFilters = self.db.profile.filters
+    end
 end
 
 function Filters:LoadFilters()
-    -- Load filters from DB or defaults
-    self.whitelist = self.db.profile.whitelist or {}
-    self.blacklist = self.db.profile.blacklist or {}
+    if self.db and self.db.profile then
+        self.whitelist = self.db.profile.whitelist or {}
+        self.blacklist = self.db.profile.blacklist or {}
+    end
 end
 
 function Filters:IsFiltered(spellId)
@@ -27,11 +33,18 @@ function Filters:IsFiltered(spellId)
 end
 
 function Filters:IsSpellEnabled(class, spellId)
-    if not self.db or not self.db.profile then return true end
-    if not self.db.profile.filters then return true end
-    if not self.db.profile.filters[class] then return true end
+    local filters = self.classFilters
+    if not filters then 
+        if not self.db or not self.db.profile or not self.db.profile.filters then return true end
+        filters = self.db.profile.filters
+        self.classFilters = filters
+    end
+    
+    local classData = filters[class]
+    if not classData then return true end
+    
     -- If not explicitly set, default to enabled
-    return self.db.profile.filters[class][spellId] ~= false
+    return classData[spellId] ~= false
 end
 
 function Filters:SetSpellEnabled(class, spellId, enabled)
@@ -39,17 +52,24 @@ function Filters:SetSpellEnabled(class, spellId, enabled)
     if not self.db.profile.filters then self.db.profile.filters = {} end
     if not self.db.profile.filters[class] then self.db.profile.filters[class] = {} end
     self.db.profile.filters[class][spellId] = enabled
+    
+    -- Update cache
+    self.classFilters = self.db.profile.filters
 end
 
 function Filters:IsAllFiltersEnabled()
-    if not self.db or not self.db.profile then return true end
-    return self.db.profile.filters and self.db.profile.filters.enabled ~= false
+    local filters = self.classFilters or (self.db and self.db.profile and self.db.profile.filters)
+    if not filters then return true end
+    return filters.enabled ~= false
 end
 
 function Filters:SetAllFiltersEnabled(enabled)
     if not self.db or not self.db.profile then return end
     if not self.db.profile.filters then self.db.profile.filters = {} end
     self.db.profile.filters.enabled = enabled
+    
+    -- Update cache
+    self.classFilters = self.db.profile.filters
 end
 
 Blackjack:RegisterModule("Filters", Filters)
@@ -69,7 +89,7 @@ function Filters:RemoveFromWhitelist(spellId)
 end
 
 function Filters:GetWhitelist()
-    return self.db and self.db.profile and self.db.profile.whitelist or {}
+    return self.whitelist or {}
 end
 
 function Filters:AddToBlacklist(spellId)
@@ -86,5 +106,5 @@ function Filters:RemoveFromBlacklist(spellId)
 end
 
 function Filters:GetBlacklist()
-    return self.db and self.db.profile and self.db.profile.blacklist or {}
+    return self.blacklist or {}
 end

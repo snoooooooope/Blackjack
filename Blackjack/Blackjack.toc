@@ -2,7 +2,7 @@
 ## Title: Blackjack
 ## Notes: Displays information about combat events you should probably know about.
 ## Author: discord@morucarti
-## Version: 1.1.0
+## Version: 1.2.0
 ## Dependencies: !!!ClassicAPI
 ## SavedVariables: BlackjackDB
 

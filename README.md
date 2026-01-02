@@ -10,9 +10,16 @@ What originally started as a rewrite to the original SpellNotifications by Veev 
 
 - **Dispel & Purge Tracking**: Alerts for successful dispels/purges with spell information
 
-- **Customizable Alerts**: Adjustable font, size, and sound effects
+- **Customizable Alerts**: 
+  - Adjustable font, size, & sound effects
+  - Icon configuration
+  - Configurable alert duration
+  - Position alerts anywhere
 
-- **Configurable Filters**: Enable/disable specific spell tracking with configurable alerts
+- **Configurable Filters**: 
+  - Enable/disable specific spell tracking per class
+  - Custom text and sound per spell
+  - Whitelist/blacklist support
 
 
 ## Commands

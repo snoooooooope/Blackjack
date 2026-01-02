@@ -77,6 +77,7 @@ function SpellDB:LoadAllSpellsFromConfig()
         local name, _, _, _, _, _, _, _, _, texture = GetSpellInfo(spellId)
         if name then
             self.data[spellId] = {
+                id = spellId,
                 name = name,
                 texture = texture,
                 flags = self:GetFlagsForType(spellData.type),
@@ -121,7 +122,7 @@ function SpellDB:GetSpellInfo(spellId)
         if Blackjack:IsDebugEnabled() then
             Blackjack:DebugMessage("No data for spellId: " .. spellId .. " available spells: " .. self:GetSpellCount())
         end
-        return {}
+        return nil
     end
     return info
 end

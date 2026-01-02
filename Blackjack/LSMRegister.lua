@@ -9,12 +9,11 @@ function LSMRegister:OnInitialize()
 end
 
 function LSMRegister:RegisterFonts()
-    local fontDir = "Interface\\AddOns\\Blackjack\\Media\\Fonts\\"
+    local addonName = Blackjack.addonName or "Blackjack"
+    local fontDir = "Interface\\AddOns\\" .. addonName .. "\\Media\\Fonts\\"
 
     local fontMappings = {
         {"Avant Garde LT Bold", "AvantGardeLTBold.ttf"},
-        -- Add more font mappings here as you add font files
-        -- Format: {"Display Name", "filename.ttf"}
     }
 
     -- Register fonts that have corresponding files
@@ -22,13 +21,14 @@ function LSMRegister:RegisterFonts()
         local displayName, fileName = mapping[1], mapping[2]
         local fontPath = fontDir .. fileName
 
-        -- let WoW handle missing files I cba
+        -- Always register to ensure availability
         LSM:Register("font", displayName, fontPath)
     end
 end
 
 function LSMRegister:RegisterSounds()
-    local soundDir = "Interface\\AddOns\\Blackjack\\Media\\Sounds\\"
+    local addonName = Blackjack.addonName or "Blackjack"
+    local soundDir = "Interface\\AddOns\\" .. addonName .. "\\Media\\Sounds\\"
 
     -- List of sound display names and their corresponding file name
     local soundMappings = {
@@ -56,11 +56,8 @@ function LSMRegister:RegisterSounds()
         local displayName, fileName = mapping[1], mapping[2]
         local soundPath = soundDir .. fileName
 
-        -- Try to register, but don't fail if already registered
-        local existing = LSM:Fetch("sound", displayName)
-        if not existing then
-            LSM:Register("sound", displayName, soundPath)
-        end
+        -- Always register to ensure custom sounds are available
+        LSM:Register("sound", displayName, soundPath)
     end
 end
 

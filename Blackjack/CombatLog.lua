@@ -1,6 +1,21 @@
 local Blackjack = _G.Blackjack
 
+local select = select
+local type = type
+local tostring = tostring
+local pairs = pairs
+local ipairs = ipairs
+local bit = bit
+local UnitGUID = UnitGUID
+local UnitClass = UnitClass
+local UnitExists = UnitExists
+local UnitIsEnemy = UnitIsEnemy
+local COMBATLOG_OBJECT_REACTION_HOSTILE = COMBATLOG_OBJECT_REACTION_HOSTILE
+local wipe = wipe or table.wipe
+
 local CombatLog = {}
+
+local targetInfoCache = {}
 
 function CombatLog:OnInitialize(db)
     self.db = db
@@ -8,6 +23,8 @@ function CombatLog:OnInitialize(db)
     self.filters = Blackjack.modules.Filters
     -- Cache player GUID
     self.playerGUID = UnitGUID("player")
+
+    self.playerClass = select(2, UnitClass("player"))
 end
 
 function CombatLog:OnEnable()
@@ -20,115 +37,165 @@ function CombatLog:OnEnable()
 end
 
 function CombatLog:ProcessEvent(...)
-
     -- 3.3.5a COMBAT_LOG_EVENT format:
-    -- "COMBAT_LOG_EVENT", timestamp, event, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellId, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool
-    local _, timestamp, event, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellId, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool = ...
+    -- timestamp, event, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellId, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool
+    
+    local event = select(3, ...)
 
-    if Blackjack:IsDebugEnabled() and (event == "SPELL_INTERRUPT" or event == "SPELL_DISPEL") then
-        Blackjack:DebugMessage("Interrupt/Dispel: " .. event .. " spellId: " .. spellId .. " spellName: " .. spellName)
+    local isInterrupt = (event == "SPELL_INTERRUPT")
+    local isDispel = (event == "SPELL_DISPEL")
+    local isMiss = (event == "SWING_MISSED" or event == "RANGE_MISSED" or event == "SPELL_MISSED")
+    
+    if not (isInterrupt or isDispel or isMiss or 
+            event == "SPELL_CAST_SUCCESS" or 
+            event == "SPELL_AURA_APPLIED" or 
+            event == "SPELL_AURA_REMOVED" or 
+            event == "SPELL_SUMMON") then
+        return
     end
 
-    -- local vars
-    local playerClass = select(2, UnitClass("player"))
+    local sourceGUID = select(4, ...)
+    local sourceName = select(5, ...)
+    local sourceFlags = select(6, ...)
+    local destName = select(8, ...)
+    
+    local spellId, spellName, extraSpellName, extraSpellSchool
+    
+    if event == "SWING_MISSED" then
+        extraSpellName = select(10, ...) 
+    elseif event == "RANGE_MISSED" or event == "SPELL_MISSED" then
+         spellId = select(10, ...)
+         spellName = select(11, ...)
+         extraSpellName = select(13, ...)
+    else
+        spellId = select(10, ...)
+        spellName = select(11, ...)
+        -- spellSchool = select(12, ...)
+        -- extraSpellId = select(13, ...)
+        extraSpellName = select(14, ...)
+        extraSpellSchool = select(15, ...)
+    end
+
+    -- Debug logging
+    if Blackjack.db.profile.debug and (isInterrupt or isDispel) then
+        Blackjack:DebugMessage("Interrupt/Dispel: " .. event .. " spellId: " .. tostring(spellId) .. " spellName: " .. tostring(spellName))
+    end
+
     local shouldTrack = false
     local alertType = nil
-    local targetInfo = nil
+    
+    -- Clear reuse table
+    wipe(targetInfoCache)
+    local targetInfo = targetInfoCache
     local isPlayerAction = false
     local spellInfo = nil
 
     -- Handle misses / dodges / parries
-    if sourceGUID == self.playerGUID then
-        if type(event) == "string" and (event:find("MISSED") or event == "SWING_MISSED" or event == "RANGE_MISSED") then
-            if Blackjack:IsDebugEnabled() then
-                Blackjack:DebugMessage("CombatLog: Player miss event detected: " .. tostring(event))
+    if sourceGUID == self.playerGUID and isMiss then
+        if Blackjack.db.profile.debug then
+            Blackjack:DebugMessage("CombatLog: Player miss event detected: " .. event)
+        end
+        shouldTrack = true
+        alertType = "miss"
+        isPlayerAction = true
+        targetInfo.missType = extraSpellName or "Miss"
+        targetInfo.spellName = spellName or "Unknown"
+
+        if spellId then
+            spellInfo = self.spellDB:GetSpellInfo(spellId)
+            if spellInfo then
+                spellInfo.id = spellId
             end
-            shouldTrack = true
-            alertType = "miss"
-            isPlayerAction = true
-            targetInfo = {
-                missType = extraSpellName or "Miss",
-                spellName = spellName or "Unknown"
+        end
+        if not spellInfo or not spellInfo.name then
+            local _, _, texture = GetSpellInfo(spellId)
+            spellInfo = { 
+                id = spellId, 
+                name = spellName or "Unknown", 
+                texture = texture, 
+                type = "personal" 
             }
-            local sInfo = self.spellDB:GetSpellInfo(spellId)
-            if not sInfo or not sInfo.name then
-                sInfo = { name = spellName or "Unknown", texture = nil, type = "personal" }
-            end
-            spellInfo = sInfo
         end
     end
 
-    spellInfo = spellInfo or self.spellDB:GetSpellInfo(spellId)
-    if not spellInfo or not spellInfo.name then
-        if Blackjack:IsDebugEnabled() then
-            Blackjack:DebugMessage("No spell info for spellId: " .. tostring(spellId))
+    if not spellInfo and spellId then
+        spellInfo = self.spellDB:GetSpellInfo(spellId)
+        if spellInfo then
+            spellInfo.id = spellId
         end
+    end
+
+    if (not spellInfo or not spellInfo.name) and not shouldTrack then
+         if Blackjack.db.profile.debug and spellId then
+             Blackjack:DebugMessage("No spell info for spellId: " .. tostring(spellId))
+         end
         return
     end
 
     -- Track player interrupts and dispels
     if sourceGUID == self.playerGUID then
-        if event == "SPELL_INTERRUPT" then
-            if Blackjack:IsDebugEnabled() then
+        if isInterrupt then
+            if Blackjack.db.profile.debug then
                 print("CombatLog: Processing player interrupt")
             end
             shouldTrack = true
             alertType = "interrupt"
             isPlayerAction = true
-            -- Get information about what was interrupted (extraSpellId/Name/School)
-            targetInfo = {
-                interruptedSpell = extraSpellName or "Unknown Spell",
-                school = extraSpellSchool or 0
-            }
-        elseif event == "SPELL_DISPEL" then
-            if Blackjack:IsDebugEnabled() then
+            targetInfo.interruptedSpell = extraSpellName or "Unknown Spell"
+            targetInfo.school = extraSpellSchool or 0
+
+        elseif isDispel then
+             if Blackjack.db.profile.debug then
                 print("CombatLog: Processing player dispel/purge")
             end
             shouldTrack = true
             isPlayerAction = true
-            -- Determine whether this was a dispel or a purge based on SpellDB classification
             if spellInfo and spellInfo.type == "purge" then
                 alertType = "purge"
             else
                 alertType = "dispel"
             end
-            -- Get information about what was removed (extraSpellId/Name/School)
-            targetInfo = {
-                dispelledSpell = extraSpellName or "Unknown Spell",
-                school = extraSpellSchool or 0
-            }
+            targetInfo.dispelledSpell = extraSpellName or "Unknown Spell"
+            targetInfo.school = extraSpellSchool or 0
         end
     else
-        -- Check if source is an enemy
-        local isEnemy = false
-        if sourceFlags then
-            local inEnemyMask = bit.band(sourceFlags, COMBATLOG_OBJECT_REACTION_HOSTILE)
-            isEnemy = inEnemyMask ~= 0
-        end
-
-        if not isEnemy and sourceGUID then
-            if UnitExists(sourceName) then
-                isEnemy = UnitIsEnemy("player", sourceName) or UnitIsEnemy("player", sourceGUID)
+        -- Handle enemy spell casts
+        if spellInfo and spellInfo.type then
+            local isEnemy = false
+            
+            -- Check sourceFlags for enemy reaction
+            if sourceFlags then
+                local inEnemyMask = bit.band(sourceFlags, COMBATLOG_OBJECT_REACTION_HOSTILE)
+                isEnemy = inEnemyMask ~= 0
             end
-        end
 
-        if isEnemy then
-            shouldTrack = self.filters:IsSpellEnabled(playerClass, spellId)
-            alertType = spellInfo.type
+            -- If not determined by flags, try to check by unit name or GUID
+            if not isEnemy and sourceGUID then
+                if sourceName and UnitExists(sourceName) then
+                    isEnemy = UnitIsEnemy("player", sourceName)
+                end
+                -- Fallback: check by GUID if name check didn't work
+                if not isEnemy then
+                    isEnemy = UnitIsEnemy("player", sourceGUID)
+                end
+            end
+
+            -- Track if enemy
+            if isEnemy then
+                shouldTrack = self.filters:IsSpellEnabled(self.playerClass, spellId)
+                alertType = spellInfo.type
+            end
         end
     end
 
-    -- Trigger alerts if enabled
-    -- Player actions bypass global filter check
     if shouldTrack and (isPlayerAction or self.filters:IsAllFiltersEnabled()) then
         local customSound = nil
         if self.db and self.db.profile and self.db.profile.spellSettings then
-            local classSettings = self.db.profile.spellSettings[playerClass] or {}
+            local classSettings = self.db.profile.spellSettings[self.playerClass] or {}
             local globalSettings = self.db.profile.spellSettings["GLOBAL"] or {}
             local s = classSettings[spellId] or globalSettings[spellId]
             if s then
                 if s.customText then
-                    targetInfo = targetInfo or {}
                     targetInfo.customText = s.customText
                 end
                 if s.sound then
@@ -164,10 +231,11 @@ function CombatLog:ParseEventType(event)
     return "OTHER"
 end
 
-if Blackjack:IsDebugEnabled() then
+if Blackjack.db and Blackjack.db.profile.debug then
     print("CombatLog.lua: Registering CombatLog module")
 end
 Blackjack:RegisterModule("CombatLog", CombatLog)
-if Blackjack:IsDebugEnabled() then
+if Blackjack.db and Blackjack.db.profile.debug then
     print("CombatLog.lua: CombatLog module registered")
 end
+

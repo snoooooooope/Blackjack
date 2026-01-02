@@ -1,4 +1,7 @@
 local LibStub = _G.LibStub
+local pairs = pairs
+local type = type
+local next = next
 
 -- Create main addon table
 local Blackjack = {}
@@ -27,7 +30,9 @@ function Blackjack:InitializeDatabase()
                 sound = true,
                 font = "Avant Garde LT Bold",
                 fontSize = 15,
+                showIcons = true,
                 iconSize = 20,
+                alertDuration = 3.0,
                 alertSound = "Attention",
                 interruptSound = "Kick",
                 dispelSound = "Dispel",
@@ -64,31 +69,16 @@ function Blackjack:LoadSavedVariables()
         end
     end
 
-    -- Register callback to save changes back to global saved variables
-    self.db:RegisterCallback("OnProfileChanged", function()
-        self:SaveToGlobal()
-    end)
-    self.db:RegisterCallback("OnProfileCopied", function()
-        self:SaveToGlobal()
-    end)
-    self.db:RegisterCallback("OnProfileReset", function()
-        self:SaveToGlobal()
-    end)
-
-    -- Also save on database changes (AceDB should do this automatically, but nothing ever works how it should)
-    self.db:RegisterCallback("OnDatabaseShutdown", function()
-        self:SaveToGlobal()
-    end)
+    self.db:RegisterCallback("OnProfileChanged", function() self:SaveToGlobal() end)
+    self.db:RegisterCallback("OnProfileCopied", function() self:SaveToGlobal() end)
+    self.db:RegisterCallback("OnProfileReset", function() self:SaveToGlobal() end)
+    self.db:RegisterCallback("OnDatabaseShutdown", function() self:SaveToGlobal() end)
 end
 
 function Blackjack:SaveToGlobal()
     -- Ensure changes are saved to the global saved variables
-    if not _G.BlackjackDB then
-        _G.BlackjackDB = {}
-    end
-    if not _G.BlackjackDB.profiles then
-        _G.BlackjackDB.profiles = {}
-    end
+    if not _G.BlackjackDB then _G.BlackjackDB = {} end
+    if not _G.BlackjackDB.profiles then _G.BlackjackDB.profiles = {} end
 
     local profileKey = self.db:GetCurrentProfile()
     _G.BlackjackDB.profiles[profileKey] = self:DeepCopy(self.db.profile)
@@ -96,7 +86,10 @@ end
 
 function Blackjack:CopyTable(source, dest)
     for k, v in pairs(source) do
-        if type(v) == "table" and type(dest[k]) == "table" then
+        if type(v) == "table" then
+            if type(dest[k]) ~= "table" then
+                dest[k] = {}
+            end
             self:CopyTable(v, dest[k])
         else
             dest[k] = v

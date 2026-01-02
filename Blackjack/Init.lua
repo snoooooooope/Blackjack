@@ -1,10 +1,11 @@
 local addonName = ...
 local LibStub = _G.LibStub
-local version = "1.0.0"
+local version = "1.1.1"
 
 -- Get the main addon table from Core.lua
 local Blackjack = _G.Blackjack
 _G[addonName] = Blackjack
+Blackjack.addonName = addonName
 
 function Blackjack:Initialize()
 
@@ -19,13 +20,16 @@ function Blackjack:Initialize()
     -- Initialize database
     self:InitializeDatabase()
 
-    -- Initialize modules
     self:InitializeModule("LSMRegister")
     self:InitializeModule("SpellDB")
     self:InitializeModule("Filters")
-    self:InitializeModule("CombatLog")
     self:InitializeModule("SoundAlerts")
     self:InitializeModule("VisualAlerts")
+    
+    -- CombatLog depends on SpellDB and Filters
+    self:InitializeModule("CombatLog")
+    
+    -- Config depends on everything
     self:InitializeModule("Config")
 
     -- Commands
